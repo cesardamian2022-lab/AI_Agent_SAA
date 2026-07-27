@@ -3,12 +3,11 @@ import pathlib
 import streamlit as st
 import importlib.util
 
-anthropic_spec = importlib.util.find_spec("anthropic")
-if anthropic_spec is not None:
-    anthropic = importlib.import_module("anthropic")
+groq_spec = importlib.util.find_spec("openai")
+if groq_spec is not None:
+    openai = importlib.import_module("openai")
 else:
-    anthropic = None
-
+    openai = None
 
 def load_dotenv():
     env_path = pathlib.Path(".env")
@@ -22,30 +21,31 @@ def load_dotenv():
             continue
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
-# Carga de variables de entorno locales (si existe .env)
 load_dotenv()
 
-# Configuración de la página
 st.set_page_config(
     page_title="SAA AI Agent | Institutional Portfolio Structuring",
     page_icon="💼",
     layout="wide"
 )
 
-# Inicialización segura del cliente de Anthropic
-api_key = os.getenv("ANTHROPIC_API_KEY") or st.secrets.get("ANTHROPIC_API_KEY", None)
+# Obtenemos la API Key gratuita de Groq
+api_key = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY", None)
 
 if not api_key:
-    st.error("No se ha detectado la ANTHROPIC_API_KEY. Configúrala en el archivo .env o en los secrets de Streamlit Cloud.")
+    st.error("No se ha detectado la GROQ_API_KEY. Obtén una gratis en console.groq.com y configúrala.")
     st.stop()
 
-if anthropic is None:
-    st.error("La librería 'anthropic' no está instalada. Ejecuta: pip install anthropic")
+if openai is None:
+    st.error("La librería 'openai' no está instalada. Ejecuta: pip install openai")
     st.stop()
 
-client = anthropic.Anthropic(api_key=api_key)
+# Configuración del cliente apuntando a Groq (Compatible con SDK de OpenAI)
+client = openai.OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=api_key
+)
 
-# Interfaz de Usuario
 st.title("💼 Strategic Asset Allocation (SAA) AI Agent")
 st.markdown("Plataforma autónoma para la recomendación y estructuración de carteras institucionales basada en teoría de carteras.")
 
@@ -58,7 +58,6 @@ with st.sidebar:
     
     ejecutar = st.button("Generar Propuesta SAA", type="primary")
 
-# Lógica del Agente
 if ejecutar:
     with st.spinner("Analizando restricciones y calculando asignación óptima..."):
         system_prompt = """
@@ -82,21 +81,20 @@ if ejecutar:
         """
 
         try:
-            response = client.messages.create(
-                model="claude-3-5-sonnet-20241022",
-                max_tokens=1500,
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
                 temperature=0.2,
-                system=system_prompt,
                 messages=[
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content}
                 ]
             )
             
             st.success("Propuesta generada con éxito.")
             st.markdown("### Resultados del Análisis SAA")
-            st.markdown(response.content[0].text)
+            st.markdown(response.choices[0].message.content)
             
         except Exception as e:
-            st.error(f"Error al conectar con la API de Anthropic: {str(e)}")
+            st.error(f"Error al conectar con la API: {str(e)}")
 else:
     st.info("Configura los parámetros en la barra lateral y presiona **'Generar Propuesta SAA'** para iniciar el análisis del agente.")
